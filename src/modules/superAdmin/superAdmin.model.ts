@@ -8,4 +8,7 @@ const superAdminSchema = new Schema<ISuperAdmin>({
   isActive: { type: Boolean, default: true },
 });
 
-export const SuperAdminModel = mongoose.model<ISuperAdmin>('SuperAdmin', superAdminSchema);
+export const SuperAdminModel = mongoose.model<ISuperAdmin>(
+  'SuperAdmin',
+  superAdminSchema
+);

@@ -11,13 +11,14 @@ export const AuthController = {
       role: ROLES.DOCTOR,
       isActive: false,
     });
-     sendResponse(res, {
-       statusCode: 201,
-       success: true,
-       message: 'Doctor registered successfully',
-       data: doctor,
-     });
+    sendResponse(res, {
+      statusCode: 201,
+      success: true,
+      message: 'Doctor has been registered successfully.',
+      data: doctor,
+    });
   }),
+
   registerUser: catchAsync(async (req: Request, res: Response) => {
     const user = await AuthService.registerUser({
       ...req.body,
@@ -27,10 +28,11 @@ export const AuthController = {
     sendResponse(res, {
       statusCode: 201,
       success: true,
-      message: 'User registered successfully',
+      message: 'User has been registered successfully.',
       data: user,
     });
   }),
+
   login: catchAsync(async (req: Request, res: Response) => {
     const { email, password } = req.body;
     const result = await AuthService.login(email, password);
@@ -38,7 +40,7 @@ export const AuthController = {
     sendResponse(res, {
       statusCode: 200,
       success: true,
-      message: 'Login successful',
+      message: 'Login successful.',
       data: result,
     });
   }),

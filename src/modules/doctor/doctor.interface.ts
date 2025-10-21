@@ -1,4 +1,4 @@
-import { Schema } from "mongoose"
+import { Schema } from 'mongoose';
 
 export type IDoctor = {
   userId: Schema.Types.ObjectId;
@@ -6,4 +6,4 @@ export type IDoctor = {
   experience: number;
   fees: number;
   chamberLocation: string;
-}
+};

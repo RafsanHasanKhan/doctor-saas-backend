@@ -9,6 +9,7 @@ import jwt from 'jsonwebtoken';
 
 export const AuthService = {
   registerDoctor: async (data: Partial<IUser> & Partial<IDoctor>) => {
+
     // Check if user already exists
     const existingUser = await UserModel.findOne({ email: data.email });
     if (existingUser) throw new Error('Doctor already exists');
@@ -33,6 +34,14 @@ export const AuthService = {
       experience: data.experience,
       fees: data.fees,
       chamberLocation: data.chamberLocation,
+    });
+
+    await DoctorModel.deleteMany({
+      $or: [
+        { userId: null },
+        { userId: { $exists: false } },
+        { userId: undefined },
+      ],
     });
 
     // Remove password from response
@@ -111,7 +120,7 @@ export const AuthService = {
     const token = jwt.sign(
       {
         id: user._id,
-        role: isSuperAdmin ? 'super-admin' : user.role,
+        role: isSuperAdmin ? 'super_admin' : user.role,
         email: user.email,
         name: user.name,
       },
