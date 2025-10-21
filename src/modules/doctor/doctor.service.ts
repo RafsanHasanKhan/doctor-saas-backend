@@ -30,7 +30,6 @@ export const DoctorService = {
 
     doctorUser.isActive = true;
     await doctorUser.save();
-
     return doctorUser;
   },
 

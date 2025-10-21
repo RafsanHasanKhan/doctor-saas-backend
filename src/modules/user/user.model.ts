@@ -8,8 +8,8 @@ const userSchema = new Schema<IUser>(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ['super_admin', 'admin', 'doctor', 'user'],
-      default: 'user',
+      enum: ['super_admin', 'admin', 'doctor', 'patient'],
+      default: 'patient',
       required: true,
     },
     isActive: { type: Boolean, default: false },
