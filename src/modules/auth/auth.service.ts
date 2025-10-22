@@ -1,136 +1,159 @@
 import config from '../../config';
-import { IDoctor } from '../doctor/doctor.interface';
+import { hashPassword } from '../../utils/hashPassword';
 import { DoctorModel } from '../doctor/doctor.model';
-import { SuperAdminModel } from '../superAdmin/superAdmin.model';
-import { IUser } from '../user/user.interface';
+import { PatientModel } from '../patient/patient.model';
 import { UserModel } from '../user/user.model';
-import bcrypt from 'bcrypt';
-import jwt from 'jsonwebtoken';
+import mongoose from 'mongoose';
 
 export const AuthService = {
-  registerDoctor: async (data: Partial<IUser> & Partial<IDoctor>) => {
+  // ================= Patient Registration =================
+  registerPatient: async (data: {
+    name: string;
+    email: string;
+    password: string;
+    age: number;
+    gender: 'male' | 'female' | 'other';
+    contact: string;
+    address?: string;
+  }) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Check if user already exists
-    const existingUser = await UserModel.findOne({ email: data.email });
-    if (existingUser) throw new Error('Doctor already exists');
+    try {
+      const { name, email, password, age, gender, contact, address } = data;
 
-    // Hash password
-    const salt = await bcrypt.genSalt(config.bcrypt_salt_rounds);
-    const hashedPassword = await bcrypt.hash(data.password!, salt);
+      // Check existing user within session
+      const existingUser = await UserModel.findOne({ email }).session(session);
+      if (existingUser) throw new Error('User already exists');
 
-    // Create user with role doctor and isActive false
-    const user = await UserModel.create({
-      name: data.name,
-      email: data.email,
-      password: hashedPassword,
-      role: 'doctor',
-      isActive: false,
-    });
+      // Password validation
+      const passwordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
+      if (!passwordRegex.test(password)) throw new Error('Password too weak');
 
-    // Create doctor profile
-    const doctor = await DoctorModel.create({
-      userId: user._id,
-      specialization: data.specialization,
-      experience: data.experience,
-      fees: data.fees,
-      chamberLocation: data.chamberLocation,
-    });
+      const hashedPassword = await hashPassword(password);
+      // Create User
+      const user = await UserModel.create(
+        [
+          {
+            name,
+            email,
+            password: hashedPassword,
+            role: 'patient',
+            isActive: true,
+          },
+        ],
+        { session }
+      );
+      const userId = user[0]._id;
 
-    await DoctorModel.deleteMany({
-      $or: [
-        { userId: null },
-        { userId: { $exists: false } },
-        { userId: undefined },
-      ],
-    });
+      // Create Patient
+      const patient = await PatientModel.create(
+        [
+          {
+            userId,
+            name,
+            age,
+            gender,
+            contact,
+            address,
+            isActive: true,
+          },
+        ],
+        { session }
+      );
 
-    // Remove password from response
-    const { password, ...userData } = user.toObject();
+      await session.commitTransaction();
+      session.endSession();
 
-    // JWT token with id, role, email, name
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: user.role,
-        email: user.email,
-        name: user.name,
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expires_in }
-    );
-
-    return { user: userData, doctor, accessToken: token };
-  },
-
-  registerUser: async (data: Partial<IUser>) => {
-    // Check if user already exists
-    const existingUser = await UserModel.findOne({ email: data.email });
-    if (existingUser) throw new Error('User already exists');
-
-    // Hash password
-    const salt = await bcrypt.genSalt(config.bcrypt_salt_rounds);
-    const hashedPassword = await bcrypt.hash(data.password!, salt);
-
-    // Create user with role 'user' and isActive true
-    const newUser = await UserModel.create({
-      ...data,
-      password: hashedPassword,
-      role: 'user',
-      isActive: true,
-    });
-
-    // Remove password from response
-    const { password, ...userData } = newUser.toObject();
-
-    // JWT token with id, role, email, name
-    const token = jwt.sign(
-      {
-        id: newUser._id,
-        role: newUser.role,
-        email: newUser.email,
-        name: newUser.name,
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expires_in }
-    );
-
-    return { user: userData, accessToken: token };
-  },
-
-  login: async (email: string, password: string) => {
-    let user = await UserModel.findOne({ email }).select('+password');
-    let isSuperAdmin = false;
-
-    if (!user) {
-      user = await SuperAdminModel.findOne({ email }).select('+password');
-      isSuperAdmin = !!user;
+      return {
+        message: 'Patient registered successfully',
+        userId,
+        patientId: patient[0]._id,
+      };
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
     }
+  },
 
-    if (!user) throw new Error('User not found');
+  // ================= Doctor Registration =================
+  registerDoctor: async (data: {
+    name: string;
+    email: string;
+    password: string;
+    specialization: string;
+    experience: number;
+    fees: number;
+    chamberLocation: string;
+  }) => {
+    const session = await mongoose.startSession();
+    session.startTransaction();
 
-    // Check if doctor is approved
-    if (user.role === 'doctor' && !user.isActive)
-      throw new Error('Doctor is not approved yet');
+    try {
+      const {
+        name,
+        email,
+        password,
+        specialization,
+        experience,
+        fees,
+        chamberLocation,
+      } = data;
 
-    // Compare password
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) throw new Error('Invalid credentials');
+      // Check existing user within session
+      const existingUser = await UserModel.findOne({ email }).session(session);
+      if (existingUser) throw new Error('Doctor already exists');
 
-    // JWT token with id, role, email, name
-    const token = jwt.sign(
-      {
-        id: user._id,
-        role: isSuperAdmin ? 'super_admin' : user.role,
-        email: user.email,
-        name: user.name,
-      },
-      config.jwt.secret,
-      { expiresIn: config.jwt.expires_in }
-    );
+      // Password validation
+      const passwordRegex =
+        /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&]).{8,}$/;
+      if (!passwordRegex.test(password)) throw new Error('Password too weak');
 
-    // Remove password from response
-    const { password: pwd, ...userData } = user.toObject();
+      const hashedPassword = await hashPassword(password);
 
-    return { user: userData, accessToken: token };
+      // Create User
+      const user = await UserModel.create(
+        [
+          {
+            name,
+            email,
+            password: hashedPassword,
+            role: 'doctor',
+            isActive: false,
+          },
+        ],
+        { session }
+      );
+      const userId = user[0]._id;
+
+      // Create Doctor
+      const doctor = await DoctorModel.create(
+        [
+          {
+            userId,
+            specialization,
+            experience,
+            fees,
+            chamberLocation,
+          },
+        ],
+        { session }
+      );
+
+      await session.commitTransaction();
+      session.endSession();
+
+      return {
+        message: 'Doctor registered: pending admin approval',
+        userId,
+        doctorId: doctor[0]._id,
+      };
+    } catch (err) {
+      await session.abortTransaction();
+      session.endSession();
+      throw err;
+    }
   },
 };
